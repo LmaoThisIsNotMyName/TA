@@ -1,0 +1,50 @@
+import socket
+from requests import get
+from sqlite3 import connect, IntegrityError
+
+def AddUser(connection, cursor, data):
+    data = data.split(':')[1].split('|')
+    if len(data) != 5:
+        return '#ID'
+    try:
+        cursor.execute("INSERT INTO users (id, username, password, email, point) VALUES (?, ?, ?, ?, ?)",
+                       (data[0], data[1], data[2], data[3], data[4]))
+        connection.commit()
+        return '#S'
+    except IntegrityError:
+        return '#ED'
+
+def main():
+    connection = connect('users.db')
+    cursor = connection.cursor()
+
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS users (
+            id TEXT PRIMARY KEY,
+            username TEXT,
+            password TEXT,
+            email TEXT,
+            point INTEGER
+        )''')
+
+    Commands = [
+        ['CreateAccount', lambda connection, cursor, data: AddUser(connection=connection, cursor=cursor, data=data)],
+    ]
+
+    Host = get(url='https://api.ipify.org/').text
+    Port = 2509
+
+    ServerSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    ServerSocket.bind((Host, Port))
+    ServerSocket.listen(1)
+
+    while True:
+        Client, Address = ServerSocket.accept()
+        print(f'[AC] Accepted "{Address[0]}" request')
+        Data = Client.recv(1024).decode()
+        for v in Commands:
+            if Data.split(':')[0] == v[0]:
+                Client.send(v[1](connection=connection, cursor=cursor, data=Data).encode())
+
+if __name__ == '__main__':
+    main()
